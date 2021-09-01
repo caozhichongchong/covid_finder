@@ -60,7 +60,7 @@ args = parser.parse_args()
 input_script = args.s
 input_script_vcf = input_script + '/SNPcalling'
 fastq_name = args.fq
-sample_fastqall = glob.glob('%s/309_Suffolk_MA*%s'%(args.i,fastq_name))
+sample_fastqall = glob.glob('%s/*%s'%(args.i,fastq_name))
 output_dir = args.o + '/SNPcalling'
 
 try:
@@ -144,7 +144,7 @@ def mapping_fastq(sample_fastqall):
         if filesize == 0:
             print('generate mapping code for %s' % (sample))
             cmds = ''
-            sample_fastq2 = os.path.join(original_folder,sample + sample_fastq.replace('1', '2'))
+            sample_fastq2 = os.path.join(original_folder,sample + fastq_name.replace('1', '2'))
             outputbwa = os.path.join(output_dir + '/bwa',
                                                sample)
             results = run_vcf(sample_fastq, sample_fastq2,

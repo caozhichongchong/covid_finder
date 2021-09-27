@@ -127,7 +127,7 @@ def merge_sample(database,vcfoutput,allsam):
     try:
         f1 = open('%s.flt.snp.vcf' % (vcfoutput))
     except FileNotFoundError:
-        cmds += '%s view -H -v snps %s.raw.vcf > %s.flt.snp.vcf \n' % (
+        cmds += '%s view -H -v snps,indels %s.raw.vcf > %s.flt.snp.vcf \n' % (
             args.bcf, vcfoutput, vcfoutput)
     return cmds
 

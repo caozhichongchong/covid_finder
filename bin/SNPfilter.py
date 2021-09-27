@@ -56,9 +56,10 @@ Allels['C']=3
 Allels_order = ['A','T','G','C']
 
 min_qual_for_call = 40 #Remove sample*candidate that has lower than this quality
-neighbour_cov_range = 100
-min_cov = 0.75 # at least min_cov * median depth of neighbour_cov_range bp
-min_cov_for_call_SNP = 10 #Remove sample*candidate
+neighbour_cov_range = 100 # 100bp
+min_cov = 0.08# at least min_cov * median depth of neighbour_cov_range bp
+min_cov1 = 6.58# at least min_cov * median depth of neighbour_cov_range bp
+min_cov_for_call_SNP = 7 # for each ALT freq
 
 ################################################### Function ########################################################
 # set up functions
@@ -81,8 +82,9 @@ def ALT_freq(Allels_count):
                 Minor_ALT.append([Allels_order[alleles],ALT_frq])
     return [Major_ALT,Minor_ALT]
 
-def all_ALT(Allels_count):
+def all_ALT(Allels_count,REF):
     allALT = set()
+    ALT_freq = 0
     ALT_set = dict()
     ALT_frq_set = set()
     for alleles in range(0, 4):
@@ -94,18 +96,21 @@ def all_ALT(Allels_count):
     ALT_frq_set = sorted(ALT_frq_set,reverse=True)
     for ALT_frq in ALT_frq_set:
         for alleles in ALT_set[ALT_frq]:
-            allALT.add(Allels_order[alleles])
-    return allALT
+            ALT = Allels_order[alleles]
+            allALT.add(ALT)
+            if ALT != REF:
+                ALT_freq += ALT_frq
+    return [allALT,ALT_freq]
 
 def outputvcf(output_name,vcf_file_list_freq,vcf_file_list_freq_snp,Sample_name):
     vcf_file_filtered = open(vcf_file + '.%s.snpfreq.txt' % (output_name), 'w')
-    vcf_file_filtered.write('CHR\tPOS\tREF\tALT\tDepth\tDepth_median_cutoff\tQuality\tGene\tGene_POS\tN_or_S\tAA_change\t%s\n'%(
+    vcf_file_filtered.write('CHR\tPOS\tREF\tALT\tDepth\tDepth_median\tDepth_ALT\tQuality\tGene\tGene_POS\tN_or_S\tAA_change\t%s\n'%(
         '\t'.join(Sample_name))
                             + ''.join(vcf_file_list_freq_snp))
     vcf_file_filtered.close()
     vcf_file_filtered = open(vcf_file + '.%s.allfreq.txt' % (output_name), 'w')
     vcf_file_filtered.write(
-        'CHR\tPOS\tREF\tALT\tDepth\tDepth_median_cutoff\tQuality\tGene\tGene_POS\tN_or_S\tAA_change\t%s\n' % (
+        'CHR\tPOS\tREF\tALT\tDepth\tDepth_median\tDepth_ALT\tQuality\tGene\tGene_POS\tN_or_S\tAA_change\t%s\n' % (
             '\t'.join(Sample_name))
         + ''.join(vcf_file_list_freq))
     vcf_file_filtered.close()
@@ -173,7 +178,7 @@ def contig_to_gene(CHR, POS):
             return [GENE,POS_gene,codon_start,Ref_seq_chr,Reverse_chr]
     return []
 
-def SNP_check_fq(lines_set,vcf_file_list_freq, vcf_file_list_freq_snp,min_cov_for_call_SNP, depth_cutoff):
+def SNP_check_fq(lines_set,vcf_file_list_freq, vcf_file_list_freq_snp,min_cov_for_call_SNP, depth_cutoff,depth_cutoff_max,median_depth):
     temp_snp_line = []
     temp_snp_line_frq = []
     temp_snp_line_NS = ['None', 'None', 'None']
@@ -200,6 +205,7 @@ def SNP_check_fq(lines_set,vcf_file_list_freq, vcf_file_list_freq_snp,min_cov_fo
             forward = Subdepth_forward[num_allels]
             reverse = Subdepth_reverse[num_allels]
             if forward + reverse < min_cov_for_call_SNP:
+                # for each alt freq >= min_cov_for_call_SNP
                 forward = 0
                 reverse = 0
             Allels_frq[Allels[allels]] += forward + reverse
@@ -208,8 +214,9 @@ def SNP_check_fq(lines_set,vcf_file_list_freq, vcf_file_list_freq_snp,min_cov_fo
         total_depth = sum(Allels_frq)
         # find major alt and calculate frequency
         if sum(Allels_frq) > 0:
-            allALT = all_ALT(Allels_frq)
-            if total_depth >= depth_cutoff:
+            allALT, ALT_freq = all_ALT(Allels_frq,REF)
+            if total_depth >= depth_cutoff and total_depth<= depth_cutoff_max and ALT_freq >= min_cov_for_call_SNP:
+                # for total alt freq >= min_cov_for_call_SNP, total depth between min_cov and min_cov1 * median depth of neighbour
                 temp_snp_line_frq.append(';'.join(str(frq_sub) for frq_sub in Allels_frq_sub))
                 # calculate NS
                 gene_info = contig_to_gene(CHR, POS)
@@ -239,15 +246,15 @@ def SNP_check_fq(lines_set,vcf_file_list_freq, vcf_file_list_freq_snp,min_cov_fo
                 temp_snp_line.append(REF)
                 temp_snp_line.append(','.join(list(allALT)))
                 vcf_file_list_freq.append(
-                    '\t'.join(temp_snp_line) + '\t%s\t%.1f\t%.1f\t%s\t%s\t%s\n' % (
-                        total_depth,depth_cutoff,
+                    '\t'.join(temp_snp_line) + '\t%s\t%.1f\t%.1f\t%s\t%s\t%s\t%s\n' % (
+                        total_depth,median_depth,ALT_freq,
                         Qual, '\t'.join(temp_snp_line_NS),
                         temp_snp_line_AA, '\t'.join(temp_snp_line_frq)))
                 if allALT != set(REF):
                     # a SNP
                     vcf_file_list_freq_snp.append(
-                        '\t'.join(temp_snp_line) + '\t%s\t%.1f\t%.1f\t%s\t%s\t%s\n' % (
-                            total_depth, depth_cutoff,
+                        '\t'.join(temp_snp_line) + '\t%s\t%.1f\t%.1f\t%s\t%s\t%s\t%s\n' % (
+                            total_depth, median_depth,ALT_freq,
                             Qual, '\t'.join(temp_snp_line_NS),
                             temp_snp_line_AA, '\t'.join(temp_snp_line_frq)))
     return [vcf_file_list_freq,vcf_file_list_freq_snp]
@@ -280,13 +287,17 @@ def SNP_filter(vcf_file,Sample_name,output_name,min_cov_for_call_SNP):
             lines_set = lines.split('\n')[0].split('\t')
             Depth = int(lines_set[7].split('DP=')[1].split(';')[0])
             alldepth.append(Depth)
+            median_depth = Depth
             if len(alldepth) > 10:
-                depth_cutoff = min_cov * median(alldepth[max(len(alldepth)-neighbour_cov_range,0):])
+                median_depth = median(alldepth[max(len(alldepth)-neighbour_cov_range,0):])
+                depth_cutoff = min_cov * median_depth
+                depth_cutoff_max = min_cov1 * median_depth
             else:
                 depth_cutoff = min_cov_for_call_SNP
+                depth_cutoff_max = 20000 # no limit
             if '.' not in lines_set[4]:
                 # potential SNP
-                if Depth >= depth_cutoff:
+                if Depth >= depth_cutoff and Depth <= depth_cutoff_max:
                     # Remove candidate locations have lower than this coverage
                     m += 1
                     if m % 1000 == 0:
@@ -294,9 +305,9 @@ def SNP_filter(vcf_file,Sample_name,output_name,min_cov_for_call_SNP):
                     vcf_file_list_freq,vcf_file_list_freq_snp = \
                         SNP_check_fq(lines_set,
                                      vcf_file_list_freq,vcf_file_list_freq_snp,
-                                     min_cov_for_call_SNP, depth_cutoff)
+                                     min_cov_for_call_SNP, depth_cutoff,depth_cutoff_max,median_depth)
             else:# NEED CHANGE
-                if Depth >= depth_cutoff:
+                if Depth >= depth_cutoff and Depth <= depth_cutoff_max:
                     # Remove candidate locations have lower than this coverage
                     m += 1
                     if m % 1000 == 0:
@@ -304,7 +315,7 @@ def SNP_filter(vcf_file,Sample_name,output_name,min_cov_for_call_SNP):
                     vcf_file_list_freq,vcf_file_list_freq_snp = \
                         SNP_check_fq(lines_set,
                                      vcf_file_list_freq,vcf_file_list_freq_snp,
-                                     min_cov_for_call_SNP, depth_cutoff)
+                                     min_cov_for_call_SNP, depth_cutoff,depth_cutoff_max,median_depth)
     outputvcf(output_name,vcf_file_list_freq,vcf_file_list_freq_snp,Sample_name)
 
 ################################################### Main ########################################################

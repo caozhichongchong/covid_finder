@@ -74,8 +74,9 @@ except IOError:
     pass
 
 reference_genome = output_dir+'/reference.fa'
-
 os.system('cp %s %s'%(args.ref,reference_genome))
+
+reference_genome = args.ref
 
 try:
     os.mkdir(output_dir+'/bwa')
@@ -92,7 +93,7 @@ try:
 except IOError:
     pass
 
-os.system('rm -rf %s'%(input_script_vcf))
+#os.system('rm -r %s'%(input_script_vcf))
 
 try:
     os.mkdir(input_script_vcf)
@@ -112,7 +113,7 @@ def run_vcf(files,files2,database,tempbamoutput):
             min(40, args.t), database, files, files2, args.sam, min(40, args.t),
             tempbamoutput, args.sam, min(40, args.t), tempbamoutput, tempbamoutput, args.sam, min(40, args.t),
             tempbamoutput)
-        cmds += 'rm -rf %s.bam %s.bam.bai\n' % (tempbamoutput, tempbamoutput)
+        cmds += 'rm -r %s.bam %s.bam.bai\n' % (tempbamoutput, tempbamoutput)
     return [cmds, '%s.sorted.bam' % (tempbamoutput)]
 
 def merge_sample(database,vcfoutput,allsam):
@@ -121,7 +122,7 @@ def merge_sample(database,vcfoutput,allsam):
     try:
         f1 = open('%s.raw.vcf' % (vcfoutput), 'r')
     except FileNotFoundError:
-        cmds += '%s mpileup --threads %s -a FMT/ADF,FMT/ADR,FMT/AD -q30 -Ou -B -d3000 -f %s %s | %s call -c -Ov --threads %s > %s.raw.vcf\n' % (
+        cmds += '%s mpileup --threads %s -a FMT/ADF,FMT/ADR,FMT/AD -q30 -Ou -B -d300000 -f %s %s | %s call -c -Ov --threads %s > %s.raw.vcf\n' % (
             args.bcf, min(40, args.t), database,
             ' '.join(allsam), args.bcf, min(40, args.t), vcfoutput)
     try:
@@ -131,34 +132,45 @@ def merge_sample(database,vcfoutput,allsam):
             args.bcf, vcfoutput, vcfoutput)
     return cmds
 
+def run_mapper(files,files2,database,tempbamoutput):
+    cmds = 'time java -Xms250g -Xmx250g -jar %s/mapper1.12.jar --max-penalty 0.05  --distinguish-query-ends 0.1 --num-threads 40 --reference %s --queries %s  --queries %s --out-vcf %s.vcf\n' % (args.s,database, files, files2, tempbamoutput)
+    return cmds
+
 def mapping_fastq(sample_fastqall):
     # mapping all fastq to reference genome
     for sample_fastq in sample_fastqall:
         original_folder, fastq_file_name = os.path.split(sample_fastq)
         sample = fastq_file_name.split(fastq_name)[0]
-        filesize = 0
-        try:
-            filesize = int(os.path.getsize(os.path.join(output_dir + '/merge/', sample + '.all.flt.snp.vcf')))
-        except FileNotFoundError:
-            pass
-        if filesize == 0:
-            print('generate mapping code for %s' % (sample))
-            cmds = ''
-            sample_fastq2 = os.path.join(original_folder,sample + fastq_name.replace('1', '2'))
-            outputbwa = os.path.join(output_dir + '/bwa',
-                                               sample)
-            results = run_vcf(sample_fastq, sample_fastq2,
-                                  reference_genome,
-                                  outputbwa)
-            outputvcf = os.path.join(output_dir + '/merge', sample)
-            cmds += results[0]
-            cmds += merge_sample(reference_genome, outputvcf, [results[1]])
-            f1 = open(os.path.join(input_script_vcf, '%s.vcf.sh' % (sample)), 'w')
-            # for blast
-            f1.write(
-                '#!/bin/bash\nsource ~/.bashrc\n%s' % (
-                    ''.join(cmds)))
-            f1.close()
+        if 'H2O' not in sample:
+            filesize = 0
+            try:
+                filesize = int(os.path.getsize(os.path.join(output_dir + '/merge/', sample + '.mapper1.vcf')))
+            except FileNotFoundError:
+                pass
+            if filesize == 0:
+                print('generate mapping code for %s' % (sample))
+                cmds = ''
+                sample_fastq2 = os.path.join(original_folder,sample + fastq_name.replace('1', '2'))
+                outputbwa = os.path.join(output_dir + '/bwa',
+                                                   sample)
+                results = run_vcf(sample_fastq, sample_fastq2,
+                                      reference_genome,
+                                      outputbwa)
+                outputvcf = os.path.join(output_dir + '/merge', sample + '.bowtie')
+                #cmds += results[0]
+                #cmds += merge_sample(reference_genome, outputvcf, [results[1]])
+                #f1 = open(os.path.join(input_script_vcf, '%s.bowtie.vcf.sh' % (sample)), 'w')
+                # for blast
+                #f1.write('#!/bin/bash\nsource ~/.bashrc\npy39\n%s' % ( ''.join(cmds)))
+                #f1.close()
+                #cmds = 'time sh %s\n' % (os.path.join(input_script_vcf, '%s.bowtie.vcf.sh' % (sample)))
+                cmds = ''
+                cmds += run_mapper(sample_fastq, sample_fastq2,
+                                      reference_genome, os.path.join(output_dir + '/merge',
+                                                                     sample + '.mapper1'))
+                f1 = open(os.path.join(input_script_vcf, '%s.mapper1.vcf.sh' % (sample)), 'w')
+                f1.write('#!/bin/bash\nsource ~/.bashrc\n%s' % (''.join(cmds)))
+                f1.close()
 
 
 ################################################## Main ########################################################
@@ -169,15 +181,18 @@ mapping_fastq(sample_fastqall)
 f1 = open(os.path.join(input_script, 'allSNPcalling.sh'), 'w')
 f1.write('#!/bin/bash\nsource ~/.bashrc\n')
 # build bowtie2
-f1.write(os.path.join(os.path.split('args.bw')[0], 'bowtie2-build') + ' %s %s\n' % (
-        reference_genome, reference_genome))
-for sub_scripts in glob.glob(os.path.join(input_script_vcf, '*.vcf.sh')):
-    sub_scripts_name = os.path.split(sub_scripts)[-1]
-    if 'jobmit' in args.job:
-        f1.write('jobmit %s %s small1\n' % (sub_scripts, os.path.split(sub_scripts)[-1]))
-    else:
-        f1.write('nohup sh %s > %s.out &\n' % (sub_scripts, os.path.split(sub_scripts)[-1]))
+#f1.write(os.path.join(os.path.split('args.bw')[0], 'bowtie2-build') + ' %s %s\n' % (
+#        reference_genome, reference_genome))
+
+#for m in range(0,10):
+    #for sub_scripts in glob.glob(os.path.join(input_script_vcf, '*.mapper1.vcf.sh')):
+        #os.system('cp %s %s%s'%(sub_scripts,sub_scripts,m))
+        #f1.write('jobmit %s%s %s%s small\n' % (sub_scripts,m,os.path.split(sub_scripts)[-1],m))
+
+for sub_scripts in glob.glob(os.path.join(input_script_vcf, '*.mapper1.vcf.sh')):
+    f1.write('jobmit %s %s small\n' % (sub_scripts, os.path.split(sub_scripts)[-1]))
 
 f1.close()
+
 print('please run: sh %s/allSNPcalling.sh'%(input_script))
 ################################################### END ########################################################

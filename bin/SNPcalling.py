@@ -133,7 +133,7 @@ def merge_sample(database,vcfoutput,allsam):
     return cmds
 
 def run_mapper(files,files2,database,tempbamoutput):
-    cmds = 'time java -Xms250g -Xmx250g -jar %s/mapper1.12.jar --max-penalty 0.05  --distinguish-query-ends 0.1 --num-threads 40 --reference %s --queries %s  --queries %s --out-vcf %s.vcf\n' % (args.s,database, files, files2, tempbamoutput)
+    cmds = 'time java -Xms800g -Xmx800g -jar %s/mapper1.12.jar --max-penalty 0.05  --distinguish-query-ends 0.1 --num-threads 40 --reference %s --queries %s  --queries %s --out-vcf %s.vcf\n' % (args.s,database, files, files2, tempbamoutput)
     return cmds
 
 def mapping_fastq(sample_fastqall):
@@ -190,7 +190,7 @@ f1.write('#!/bin/bash\nsource ~/.bashrc\n')
         #f1.write('jobmit %s%s %s%s small\n' % (sub_scripts,m,os.path.split(sub_scripts)[-1],m))
 
 for sub_scripts in glob.glob(os.path.join(input_script_vcf, '*.mapper1.vcf.sh')):
-    f1.write('jobmit %s %s small\n' % (sub_scripts, os.path.split(sub_scripts)[-1]))
+    f1.write('jobmit %s %s big\n' % (sub_scripts, os.path.split(sub_scripts)[-1]))
 
 f1.close()
 

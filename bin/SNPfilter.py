@@ -265,7 +265,7 @@ def SNP_check_fq(lines_set,vcf_file_list_freq, vcf_file_list_freq_snp,depth_ALT_
                     Qual, '\t'.join(temp_snp_line_NS),
                     temp_snp_line_AA, '\t'.join(temp_snp_line_frq)))
             if total_depth >= depth_cutoff and ALT_freq >= depth_ALT_cutoff and allALT != [REFold]:
-                # for total depth between depth_ratio_cutoff1 and depth_ratio_cutoff2 * median depth of neighbour
+                # for total depth > depth_ratio_cutoff1* median depth of neighbour
                 # a SNP
                 vcf_file_list_freq_snp.append(
                     '\t'.join(
@@ -355,7 +355,6 @@ def SNP_filter(vcf_file,Sample_name,output_name,depth_ALT_cutoff, bowtie = True)
                 m += 1
             median_depth = median(alldepth[max(m - neighbour_cov_range,0):min(m + neighbour_cov_range,len(alldepth))])
             depth_cutoff = depth_ratio_cutoff1 * median_depth
-            #depth_cutoff_max = depth_ratio_cutoff2 * median_depth
             if m % 1000 == 0:
                 print('%s processed %s loci' % (datetime.now(), m))
             vcf_file_list_freq, vcf_file_list_freq_snp, oldPOS, oldPOS_out = \
@@ -409,8 +408,8 @@ for vcf_file in allvcf_file:
         print('%s finished output %s' % (datetime.now(), sample))
 
 # run vcf filtering for mapper
-depth_ratio_cutoff1 = 0.63 # for SNP at least depth_ratio_cutoff1 * median depth of neighbour_cov_range bp
-depth_ALT_cutoff = 11  # for each REF + ALT freq
+depth_ratio_cutoff1 = 0.5 # for SNP at least depth_ratio_cutoff1 * median depth of neighbour_cov_range bp
+depth_ALT_cutoff = 20  # for each REF + ALT freq
 ALT_freq_cutoff =0.02 # for SNP depth of one ALT / total depth
 output_name = 'final'
 allvcf_file = glob.glob(os.path.join(args.i, '*mapper1.vcf'))

@@ -57,8 +57,7 @@ Allels['+C']=8
 Allels_order = ['A','T','G','C','-','+A','+T','+G','+C']
 normal_alleles = ['A','T','G','C']
 # set up filtering parameter
-SNP_prevalence_cutoff = 5
-SNP_prevalence_cutoff_strict_ALT_freq = 3
+SNP_prevalence_cutoff = 3
 max_sequencing_error_rate = 0.008
 ################################################### Function ########################################################
 # set up functions
@@ -196,7 +195,6 @@ def binom_prob(depthsum,freqsum,allfreq_order):
 
 def outputSNP(allSNP,allsamples,allfreq,clinical_variant):
     allfreq_order = []
-    pass_num = 0
     sample_time = dict()
     for i in range(0,total_number_samples):
         sample = allsamples[i]
@@ -210,17 +208,17 @@ def outputSNP(allSNP,allsamples,allfreq,clinical_variant):
         else:
             allfreq_order.append(1)
     alloutput = []
-    alloutput.append('Color\tClinical\tClinical_time\tSampling_time\tGoodSNP\tPOS\tREF\tALT\tCount\tCount_ALTfreq_cutoff\tPrevalence\tPrevalence_ALTfreq_cutoff\tClinical_prevalence\tGene\tGene_POS\tN_S\tAAchange\t%s\n'%('\t'.join(allsamples)))
+    alloutput.append('Color\tClinical\tClinical_time\tSampling_time\tGoodSNP\tPOS\tREF\tALT\tCount\tPrevalence\tClinical_prevalence\tGene\tGene_POS\tN_S\tAAchange\t%s\n'%('\t'.join(allsamples)))
     alloutputfreq = []
-    alloutputfreq.append('Color\tClinical\tClinical_time\tSampling_time\tGoodSNP\tPOS\tREF\tALT\tCount\tCount_ALTfreq_cutoff\tPrevalence\tPrevalence_ALTfreq_cutoff\tClinical_prevalence\tAvg_ALT_freq\tGene\tGene_POS\tN_S\tAAchange\t%s\n' % ('\t'.join(allsamples)))
+    alloutputfreq.append('Color\tClinical\tClinical_time\tSampling_time\tGoodSNP\tPOS\tREF\tALT\tCount\tPrevalence\tClinical_prevalence\tAvg_ALT_freq\tGene\tGene_POS\tN_S\tAAchange\t%s\n' % ('\t'.join(allsamples)))
+    checkgoodSNP = (allgoodSNPs==set())
     for POS_ALT in allSNP:
         geneinfor, depthsum, freqsum = allSNP[POS_ALT]
         prevalence = len([i for i in depthsum if i > 0])
-        depthsum, freqsum = binom_prob(depthsum,freqsum,allfreq_order)
-        prevalence_strict = len([i for i in depthsum if i > 0])
+        #depthsum, freqsum = binom_prob(depthsum,freqsum,allfreq_order)
         INclinical = POS_ALT in clinical_variant
         clinical_time,clinical_prevalence = clinical_variant.get(POS_ALT,['',0])
-        if prevalence_strict > 0:
+        if prevalence > 0:
             allsampletime_withmut = [sample_time[i] for i in range(0, total_number_samples) if depthsum[i] > 0]
             allsampletime_withmut.sort()
             if INclinical:
@@ -233,18 +231,18 @@ def outputSNP(allSNP,allsamples,allfreq,clinical_variant):
             else:
                 Color = 'grey'
             SNP_confident = 'False'
-            if prevalence >= SNP_prevalence_cutoff:
+            if checkgoodSNP:
+                if prevalence >= SNP_prevalence_cutoff:
+                    SNP_confident = 'True'
+                elif total_number_samples <= 5 and prevalence >= total_number_samples*0.5:
+                    SNP_confident = 'True'
+            elif POS_ALT in allgoodSNPs:
                 SNP_confident = 'True'
-            elif prevalence_strict >= SNP_prevalence_cutoff_strict_ALT_freq:
-                SNP_confident = 'True'
-                pass_num += 1
             Avg_ALT_freq = '%.2f' % (100*statistics.mean([i for i in freqsum if i > 0]))
             prevalence2 = '%.2f' % (100 * prevalence / total_number_samples)
-            prevalence_strict2 = '%.2f' % (100 * prevalence_strict / total_number_samples)
             clinical_prevalence = (100 * clinical_prevalence / total_clinical_seq)
-            alloutput.append('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n'%(Color,INclinical,clinical_time,str(allsampletime_withmut[0]),SNP_confident,POS_ALT,prevalence,prevalence_strict,prevalence2,prevalence_strict2,clinical_prevalence,geneinfor,'\t'.join(['%.0f'%i for i in depthsum])))
-            alloutputfreq.append('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (Color,INclinical,clinical_time,str(allsampletime_withmut[0]),SNP_confident,POS_ALT, prevalence,prevalence_strict,prevalence2,prevalence_strict2,clinical_prevalence,Avg_ALT_freq,geneinfor, '\t'.join(['%.2f'%(i*100) for i in freqsum])))
-    print(pass_num)
+            alloutput.append('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n'%(Color,INclinical,clinical_time,str(allsampletime_withmut[0]),SNP_confident,POS_ALT,prevalence,prevalence2,clinical_prevalence,geneinfor,'\t'.join(['%.0f'%i for i in depthsum])))
+            alloutputfreq.append('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (Color,INclinical,clinical_time,str(allsampletime_withmut[0]),SNP_confident,POS_ALT, prevalence,prevalence2,clinical_prevalence,Avg_ALT_freq,geneinfor, '\t'.join(['%.2f'%(i*100) for i in freqsum])))
     if args.state == 'None':
         f1 = open('%s/alldepthsum.txt'%(args.i),'w')
         f1.write(''.join(alloutput))
@@ -284,7 +282,7 @@ def load_primer_coverage(covfile):
             lambda_mol = math.log(max(1 - p,1E-2), p_bp)/max_primer_cover
             allfreq.setdefault(sample, 1 / max(lambda_mol,1E-2))
         newoutput.append('%s\t%s\t%s\n'%(sample,primer_cov,lambda_mol))
-    if False:
+    if args.state == 'None':
         f1 = open(covfile + '.molecule.txt', 'w')
         f1.write(''.join(newoutput))
         f1.close()
@@ -293,21 +291,51 @@ def load_primer_coverage(covfile):
 def load_clinical_variant(clinical_file):
     clinical_variant = dict()
     allclinicalseq = set()
-    for lines in open(clinical_file,'r'):
-        if not lines.startswith('\tPOS'):
-            lines_set = lines.split('\n')[0].split('\t')
-            try:
-                POS,REF,ALT,date,state,seq = lines_set[1:7]
-                mut = '%s\t%s\t%s'%(POS,REF,ALT)
-                temp_num = clinical_variant.get(mut, [date, 0])
-                temp_num[1] += 1
-                clinical_variant[mut] = temp_num
-                #clinical_variant.setdefault(mut, [date,0])
-                allclinicalseq.add(seq)
-            except ValueError:
-                print(lines_set)
+    if args.state != 'None':
+        for lines in open(clinical_file,'r'):
+            if not lines.startswith('\tPOS'):
+                lines_set = lines.split('\n')[0].split('\t')
+                try:
+                    POS,REF,ALT,date,state,seq = lines_set[1:7]
+                    mut = '%s\t%s\t%s'%(POS,REF,ALT)
+                    temp_num = clinical_variant.get(mut, [date, 0])
+                    temp_num[1] += 1
+                    clinical_variant[mut] = temp_num
+                    #clinical_variant.setdefault(mut, [date,0])
+                    allclinicalseq.add(seq)
+                except ValueError:
+                    print(lines_set)
+    else:
+        for lines in open(clinical_file,'r'):
+            if not lines.startswith('\tPOS'):
+                lines_set = lines.split('\n')[0].split('\t')
+                try:
+                    POS,REF,ALT,year,month,day,seq = lines_set[0:7]
+                    mut = '%s\t%s\t%s'%(POS,REF,ALT)
+                    temp_num = clinical_variant.get(mut, ['%s-%s-%s'%(year,month,day,), 0])
+                    temp_num[1] += 1
+                    clinical_variant[mut] = temp_num
+                    #clinical_variant.setdefault(mut, [date,0])
+                    allclinicalseq.add(seq)
+                except ValueError:
+                    print(lines_set)
     return [clinical_variant,len(allclinicalseq)]
+
+def load_goodSNPs():
+    allgoodSNPs = set()
+    if args.state != 'None':
+        for lines in open('%s/alldepthsum.txt' % (args.i), 'r'):
+            if not lines.startswith('\tPOS'):
+                lines_set = lines.split('\n')[0].split('\t')
+                GoodSNP,POS,REF,ALT = lines_set[4:8]
+                if GoodSNP == 'True':
+                    allgoodSNPs.add('%s\t%s\t%s'%(POS,REF,ALT))
+    return allgoodSNPs
+
 ################################################### Main ########################################################
+# load goodSNPs
+allgoodSNPs = load_goodSNPs()
+print(len(allgoodSNPs))
 # load clinical variants
 clinical_variant,total_clinical_seq = load_clinical_variant(args.clinical)
 # evaluate molecules and ALT frequency by primer coverage
